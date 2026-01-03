@@ -52,12 +52,6 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       # ----------------------------
-      # Dependencies
-      # ----------------------------
-      - name: Install JS deps
-        run: bun install
-
-      # ----------------------------
       # Version bump + tag + changelog
       # ----------------------------
       - name: Run release-it
@@ -90,6 +84,13 @@ jobs:
             echo "❌ Invalid input combination"
             exit 1
           fi
+
+
+      # ----------------------------
+      # Dependencies
+      # ----------------------------
+      - name: Install JS deps
+        run: bun install
 
       # ----------------------------
       # Build Tauri
