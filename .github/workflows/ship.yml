@@ -58,61 +58,40 @@ jobs:
         run: bun install
 
       # ----------------------------
-      # Release-it config (inline, clean)
-      # ----------------------------
-      - name: Create release-it config
-        run: |
-          cat <<'EOF' > .release-it.json
-          {
-            "git": {
-              "commitMessage": "chore(release): v${version}",
-              "tagName": "v${version}",
-              "push": true
-            },
-            "github": {
-              "release": true,
-              "draft": ${{
-                inputs.prerelease == '' && 'true' || 'false'
-              }},
-              "prerelease": ${{
-                inputs.prerelease != '' && 'true' || 'false'
-              }}
-            },
-            "plugins": {
-              "@release-it/conventional-changelog": {
-                "preset": "conventionalcommits"
-              }
-            },
-            "npm": false
-          }
-          EOF
-
-      # ----------------------------
       # Version bump + tag + changelog
       # ----------------------------
       - name: Run release-it
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          bun add -D release-it @release-it/conventional-changelog
+
           if [ "${{ inputs.bump }}" = "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
             # prerelease iteration: 0.4.0-beta.1 → 0.4.0-beta.2
-            bunx release-it --preRelease=${{ inputs.prerelease }} --ci
+            bunx release-it \
+              --preRelease=${{ inputs.prerelease }} \
+              --github.prerelease=true \
+              --ci
 
           elif [ "${{ inputs.bump }}" != "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
-            # first prerelease
-            bunx release-it pre${{ inputs.bump }} \
+            # first prerelease: 0.3.0 → 0.4.0-beta.1
+            bunx release-it \
+              pre${{ inputs.bump }} \
               --preRelease=${{ inputs.prerelease }} \
+              --github.prerelease=true \
               --ci
 
           elif [ "${{ inputs.bump }}" != "none" ]; then
-            # stable release
-            bunx release-it ${{ inputs.bump }} --ci
+            # stable release → draft first
+            bunx release-it \
+              ${{ inputs.bump }} \
+              --github.draft=true \
+              --ci
 
           else
             echo "❌ Invalid input combination"
             exit 1
           fi
-
 
       # ----------------------------
       # Build Tauri
