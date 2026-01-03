@@ -5,9 +5,10 @@ on:
     inputs:
       bump:
         description: 'Version bump (required only for first prerelease or stable)'
-        required: false
+        required: true
         type: choice
         options:
+          - none
           - patch
           - minor
           - major
@@ -93,20 +94,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "${{ inputs.prerelease }}" ] && [ -z "${{ inputs.bump }}" ]; then
-            # prerelease iteration (beta.1 → beta.2)
+          if [ "${{ inputs.bump }}" = "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
+            # prerelease iteration: 0.4.0-beta.1 → 0.4.0-beta.2
             bunx release-it --preRelease=${{ inputs.prerelease }} --ci
 
-          elif [ -n "${{ inputs.prerelease }}" ]; then
-            # first prerelease (0.3.0 → 0.4.0-beta.1)
+          elif [ "${{ inputs.bump }}" != "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
+            # first prerelease
             bunx release-it pre${{ inputs.bump }} \
               --preRelease=${{ inputs.prerelease }} \
               --ci
 
-          else
+          elif [ "${{ inputs.bump }}" != "none" ]; then
             # stable release
             bunx release-it ${{ inputs.bump }} --ci
+
+          else
+            echo "❌ Invalid input combination"
+            exit 1
           fi
+
 
       # ----------------------------
       # Build Tauri
