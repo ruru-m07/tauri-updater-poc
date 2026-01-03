@@ -64,8 +64,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bun add -D release-it @release-it/conventional-changelog
-
           if [ "${{ inputs.bump }}" = "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
             # prerelease iteration: 0.4.0-beta.1 → 0.4.0-beta.2
             bunx release-it \
