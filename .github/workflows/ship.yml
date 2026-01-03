@@ -1,72 +1,130 @@
-name: 'ship'
+name: ship
 
 on:
-  release: 
-    types: [published]
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Prerelease identifier (leave empty for stable)'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ship-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  publish-tauri:
+  release:
+    name: Build & Release Tauri App
+    runs-on: macos-latest
+
     permissions:
       contents: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'macos-latest'
-            args: '--target universal-apple-darwin'
-            target: 'universal-apple-darwin'
-
-    runs-on: ${{ matrix.platform }}
     steps:
+      # ----------------------------
+      # Checkout
+      # ----------------------------
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # required for changelog
 
+      # ----------------------------
+      # Tooling
+      # ----------------------------
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install Rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Add additional Rust targets
-        if: matrix.platform == 'macos-latest'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install frontend dependencies
+      # ----------------------------
+      # Dependencies
+      # ----------------------------
+      - name: Install JS deps
         run: bun install
 
+      # ----------------------------
+      # Release-it config (inline, clean)
+      # ----------------------------
+      - name: Create release-it config
+        run: |
+          cat <<'EOF' > .release-it.json
+          {
+            "git": {
+              "commitMessage": "chore(release): v${version}",
+              "tagName": "v${version}",
+              "push": true
+            },
+            "github": {
+              "release": true,
+              "draft": ${{
+                inputs.prerelease == '' && 'true' || 'false'
+              }},
+              "prerelease": ${{
+                inputs.prerelease != '' && 'true' || 'false'
+              }}
+            },
+            "plugins": {
+              "@release-it/conventional-changelog": {
+                "preset": "conventionalcommits"
+              }
+            },
+            "npm": false
+          }
+          EOF
+
+      # ----------------------------
+      # Version bump + tag + changelog
+      # ----------------------------
+      - name: Run release-it
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun add -D release-it @release-it/conventional-changelog
+
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            bunx release-it \
+              pre${{ inputs.release_type }} \
+              --preRelease=${{ inputs.prerelease }} \
+              --ci
+          else
+            bunx release-it \
+              ${{ inputs.release_type }} \
+              --ci
+          fi
+
+      # ----------------------------
+      # Build Tauri
+      # ----------------------------
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
         with:
-          tagName: v__VERSION__
-          releaseName: 'v__VERSION__'
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          args: --target universal-apple-darwin
+
+      # ----------------------------
+      # Publish stable draft
+      # ----------------------------
+      - name: Publish draft release (stable only)
+        if: inputs.prerelease == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit \
+            "$(git describe --tags --abbrev=0)" \
+            --draft=false
