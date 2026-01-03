@@ -3,18 +3,18 @@ name: ship
 on:
   workflow_dispatch:
     inputs:
-      release_type:
-        description: 'Release type'
-        required: true
+      bump:
+        description: 'Version bump (required only for first prerelease or stable)'
+        required: false
         type: choice
         options:
           - patch
           - minor
           - major
+
       prerelease:
-        description: 'Prerelease identifier (leave empty for stable)'
+        description: 'Prerelease identifier (beta, rc, alpha)'
         required: false
-        default: ''
         type: string
 
 concurrency:
@@ -93,17 +93,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bun add -D release-it @release-it/conventional-changelog
+          if [ -n "${{ inputs.prerelease }}" ] && [ -z "${{ inputs.bump }}" ]; then
+            # prerelease iteration (beta.1 → beta.2)
+            bunx release-it --preRelease=${{ inputs.prerelease }} --ci
 
-          if [ -n "${{ inputs.prerelease }}" ]; then
-            bunx release-it \
-              pre${{ inputs.release_type }} \
+          elif [ -n "${{ inputs.prerelease }}" ]; then
+            # first prerelease (0.3.0 → 0.4.0-beta.1)
+            bunx release-it pre${{ inputs.bump }} \
               --preRelease=${{ inputs.prerelease }} \
               --ci
+
           else
-            bunx release-it \
-              ${{ inputs.release_type }} \
-              --ci
+            # stable release
+            bunx release-it ${{ inputs.bump }} --ci
           fi
 
       # ----------------------------
