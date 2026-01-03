@@ -52,12 +52,22 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       # ----------------------------
+      # Dependencies
+      # ----------------------------
+      - name: Install JS deps
+        run: bun install
+        
+      # ----------------------------
       # Version bump + tag + changelog
       # ----------------------------
       - name: Run release-it
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # clean git state
+          git reset --hard
+          git clean -fd
+        
           if [ "${{ inputs.bump }}" = "none" ] && [ -n "${{ inputs.prerelease }}" ]; then
             # prerelease iteration: 0.4.0-beta.1 → 0.4.0-beta.2
             bunx release-it \
@@ -85,12 +95,6 @@ jobs:
             exit 1
           fi
 
-
-      # ----------------------------
-      # Dependencies
-      # ----------------------------
-      - name: Install JS deps
-        run: bun install
 
       # ----------------------------
       # Build Tauri
