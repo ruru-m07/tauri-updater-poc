@@ -12,8 +12,14 @@ function App() {
         onClick={async () => {
           const update = await check();
 
+          console.log(update)
+
           if (update) {
-            setUpdate(`found update ${update.version} from ${update.date} with notes ${update.body} - current version is ${update.currentVersion}`);
+            const message = `found update ${update.version} from ${update.date} with notes ${update.body} - current version is ${update.currentVersion}`;
+            console.log(message)
+            setUpdate(message);
+          } else {
+            setUpdate("no update found");
           }
         }}
       >
